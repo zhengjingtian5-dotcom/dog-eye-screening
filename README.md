@@ -108,6 +108,25 @@ Tests use synthetic data and run on CPU in a few seconds:
 pytest
 ```
 
+## Demo
+
+A bilingual (English / 中文) Gradio page with a JSON API, both served by FastAPI ([`app.py`](app.py)). It returns one of three outcomes, never a diagnosis:
+
+| Outcome | When |
+| --- | --- |
+| See a vet | Score at or above the validation threshold |
+| Not sure: retake or see a vet | Score within 0.15 below the threshold, or the photo is too dark, bright or blurry |
+| Looks normal | Score clearly below the threshold |
+
+```bash
+pip install -e ".[features,app]"
+cp runs/baseline/model.joblib models/baseline.joblib
+uvicorn app:app --port 7860
+# page: http://localhost:7860   API: curl -F file=@eye.jpg http://localhost:7860/api/screen
+```
+
+The demo expects a photo cropped to one eye; it has no eye detector yet.
+
 ## Limitations
 
 - Labels come from a public dataset of unknown provenance and have not yet been audited by a vet.
@@ -120,7 +139,8 @@ pytest
 - [x] Data survey and problem definition
 - [x] Baseline: frozen DINOv2 + logistic regression (v1)
 - [ ] Fine-tuned ConvNeXt / ViT, and a comparison with a multimodal LLM looking at the same photos
-- [ ] Bilingual (English / Chinese) demo with FastAPI + Gradio, abstaining on uncertain or low-quality photos
+- [x] Bilingual (English / Chinese) demo with FastAPI + Gradio, abstaining on uncertain or low-quality photos
+- [ ] Public demo on Hugging Face Spaces
 - [ ] Model card, external test on DogEyeSeg4, cat-eye generalisation test
 
 ## 中文简介
