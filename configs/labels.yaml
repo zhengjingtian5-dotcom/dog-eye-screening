@@ -1,0 +1,27 @@
+# Maps each Roboflow project in the "dog-eyes" workspace to a screening label.
+#   normal   -> the eye looks healthy
+#   see_vet  -> any condition that should prompt a vet visit
+#   exclude  -> left out of training and evaluation until a vet confirms how to treat it
+#
+# Keys are matched against the project's slug and its display name after
+# lower-casing and replacing spaces, underscores and dots with hyphens, so
+# "nuclear sclerosis" and "nuclear-sclerosis" both match.
+
+workspace: dog-eyes
+
+projects:
+  healthy: normal
+  conjunctivitis: see_vet
+  blepharitis: see_vet
+  entropion: see_vet
+  eyelid-tumor: see_vet
+  pigmented-keratitis: see_vet
+  # The class name is unclear (possibly a mistranslation); kept as see_vet
+  # but reported separately so a vet can review it.
+  mastopathy: see_vet
+  # Age-related lens change that is often harmless and easy to confuse with
+  # cataract. Excluded until a vet confirms the labelling rule.
+  nuclear-sclerosis: exclude
+  # A combined multi-class project; skipped to avoid duplicating the
+  # per-condition projects above.
+  dog-eyes-ver-4: exclude
