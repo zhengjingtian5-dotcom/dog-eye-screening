@@ -38,6 +38,36 @@ Images are not redistributed in this repo; the pipeline downloads them with your
 
 ## Results
 
+### v1: baseline after the leakage fix, 25 Oct 2026
+
+Test split: 1,625 crops from 609 independent photo groups (75 healthy, 534 see_vet). Threshold 0.527, set on validation for 95% recall. Intervals are 95% bootstrap intervals over photo groups.
+
+| Recall (see_vet) | Specificity | AUROC | AUPRC | ECE |
+| --- | --- | --- | --- | --- |
+| **95.9%** (94.1–97.5%) | **99.1%** (97.8–100%) | 0.986 | 0.998 | 0.045 |
+
+Flag rate by condition (share sent to "see a vet"):
+
+| Condition | Test crops | Flagged |
+| --- | --- | --- |
+| Eyelid tumour | 247 | 100% |
+| Blepharitis | 249 | 99.6% |
+| Conjunctivitis | 262 | 99.2% |
+| Pigmented keratitis | 254 | 98.8% |
+| "Mastopathy" | 176 | 94.3% |
+| **Entropion** | 212 | **80.7%** |
+| Healthy (false alarms) | 225 | 0.9% |
+
+![Confusion matrix](docs/results/v1/confusion_matrix.png) ![Reliability diagram](docs/results/v1/reliability.png)
+
+What this says:
+
+- **Entropion is the weak spot.** It is an inward-rolling eyelid: a shape change rather than redness or discharge, and harder to see in a tight crop. It accounts for most of the misses.
+- **The model is under-confident.** Observed see_vet rates sit above the predicted probabilities (reliability diagram), a side effect of balanced class weights. Calibrating on validation is a cheap fix before the probabilities are shown to users.
+- **Fixing the leak barely moved the scores** (recall 93.9% to 95.9%, specificity unchanged). That makes copy leakage an unlikely explanation for the high numbers, which leaves the project-shortcut concern below as the main open question.
+
+Full metrics: [`docs/results/v1/metrics.json`](docs/results/v1/metrics.json).
+
 ### v0: first run, 25 Oct 2026 (superseded)
 
 Test split, 1,685 crops, threshold 0.865 set on validation for 95% recall:
@@ -48,7 +78,7 @@ Test split, 1,685 crops, threshold 0.865 set on validation for 95% recall:
 
 Flag rate by condition: blepharitis 99.6%, eyelid tumour 98.7%, conjunctivitis 97.7%, pigmented keratitis 96.9%, "mastopathy" 90.5%, **entropion 79.3%**; healthy eyes falsely flagged 0.9%.
 
-**Why these numbers are not trusted.** Checking the test predictions showed that 175 of 1,377 original photos in the test split had augmented copies the hash and embedding links had *not* grouped together. The same miss almost certainly put copies of training photos into test, so v0 is optimistic. The split now also links images by their original upload name (Roboflow keeps it before `.rf.<hash>`). v1 numbers will replace this section.
+**Why these numbers are not trusted.** Checking the test predictions showed that 175 of 1,377 original photos in the test split had augmented copies the hash and embedding links had *not* grouped together. The same miss almost certainly put copies of training photos into test, so v0 is optimistic. The split now also links images by their original upload name (Roboflow keeps it before `.rf.<hash>`). v1 above uses the fixed split.
 
 Two more things to keep in mind when reading any result here:
 
@@ -88,7 +118,7 @@ pytest
 ## Roadmap
 
 - [x] Data survey and problem definition
-- [x] Baseline: frozen DINOv2 + logistic regression (v0 run; v1 rerun after the leakage fix)
+- [x] Baseline: frozen DINOv2 + logistic regression (v1)
 - [ ] Fine-tuned ConvNeXt / ViT, and a comparison with a multimodal LLM looking at the same photos
 - [ ] Bilingual (English / Chinese) demo with FastAPI + Gradio, abstaining on uncertain or low-quality photos
 - [ ] Model card, external test on DogEyeSeg4, cat-eye generalisation test
