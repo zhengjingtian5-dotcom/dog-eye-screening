@@ -32,17 +32,28 @@ Images are not redistributed in this repo; the pipeline downloads them with your
 
 1. **Crop** each image to the largest annotated eye box, plus a 15% margin ([`data.py`](src/dogeye/data.py)).
 2. **Embed** each crop with frozen [DINOv2-small](https://huggingface.co/facebook/dinov2-small) ([`features.py`](src/dogeye/features.py)).
-3. **Group near-duplicates** by perceptual hash (≤ 6 bits apart) or embedding cosine similarity (≥ 0.97), then **split by group**, stratified by label, 70/15/15 ([`groups.py`](src/dogeye/groups.py)). Public image sets often contain flipped, re-encoded or augmented copies of the same photo; splitting by image would let copies leak into the test set and inflate scores.
+3. **Group near-duplicates** by original upload name, perceptual hash (≤ 6 bits apart) or embedding cosine similarity (≥ 0.97), then **split by group**, stratified by label, 70/15/15 ([`groups.py`](src/dogeye/groups.py)). Public image sets often contain flipped, re-encoded or augmented copies of the same photo; splitting by image would let copies leak into the test set and inflate scores.
 4. **Train** a standardised logistic regression with balanced class weights, picking C on validation AUPRC. The decision threshold is the highest one that still reaches 95% recall on validation ([`train.py`](src/dogeye/train.py)).
 5. **Evaluate** once on test: confusion matrix, recall, specificity, AUROC, AUPRC, expected calibration error, reliability diagram, and the flag rate per condition so you can see which diseases are missed ([`metrics.py`](src/dogeye/metrics.py)).
 
 ## Results
 
-Not run yet. Numbers will go here after the first run of the notebook.
+### v0: first run, 25 Oct 2026 (superseded)
 
-| Split | Recall (see_vet) | Specificity | AUROC | AUPRC | ECE |
-| --- | --- | --- | --- | --- | --- |
-| Test | | | | | |
+Test split, 1,685 crops, threshold 0.865 set on validation for 95% recall:
+
+| Recall (see_vet) | Specificity | AUROC | AUPRC | ECE |
+| --- | --- | --- | --- | --- |
+| 93.9% | 99.1% | 0.988 | 0.998 | 0.030 |
+
+Flag rate by condition: blepharitis 99.6%, eyelid tumour 98.7%, conjunctivitis 97.7%, pigmented keratitis 96.9%, "mastopathy" 90.5%, **entropion 79.3%**; healthy eyes falsely flagged 0.9%.
+
+**Why these numbers are not trusted.** Checking the test predictions showed that 175 of 1,377 original photos in the test split had augmented copies the hash and embedding links had *not* grouped together. The same miss almost certainly put copies of training photos into test, so v0 is optimistic. The split now also links images by their original upload name (Roboflow keeps it before `.rf.<hash>`). v1 numbers will replace this section.
+
+Two more things to keep in mind when reading any result here:
+
+- Each condition comes from a separate Roboflow project, so the model may partly learn *which project an image came from* (camera, lighting, crop style) rather than the disease. The external DogEyeSeg4 test and owners' own phone photos are the real check.
+- Healthy eyes are only ~14% of the data, so precision is high almost by construction; recall and specificity are the numbers to read.
 
 ## Run it
 
@@ -77,7 +88,7 @@ pytest
 ## Roadmap
 
 - [x] Data survey and problem definition
-- [ ] Baseline: frozen DINOv2 + logistic regression
+- [x] Baseline: frozen DINOv2 + logistic regression (v0 run; v1 rerun after the leakage fix)
 - [ ] Fine-tuned ConvNeXt / ViT, and a comparison with a multimodal LLM looking at the same photos
 - [ ] Bilingual (English / Chinese) demo with FastAPI + Gradio, abstaining on uncertain or low-quality photos
 - [ ] Model card, external test on DogEyeSeg4, cat-eye generalisation test

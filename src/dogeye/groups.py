@@ -2,9 +2,14 @@
 
 Public datasets often contain the same photo several times (flipped, cropped,
 re-encoded, or as Roboflow augmentations). If copies land on both sides of a
-split, test accuracy is inflated. We link two images when either their
-perceptual hashes are close or their DINOv2 embeddings are nearly identical,
-take connected components as groups, and split by group.
+split, test accuracy is inflated. We link two images when they come from the
+same original upload (Roboflow keeps the original name before ".rf.<hash>"),
+when their perceptual hashes are close, or when their DINOv2 embeddings are
+nearly identical, then take connected components as groups and split by group.
+
+Hashes and embeddings alone miss many Roboflow augmentations (rotations,
+brightness and blur change both), which leaked copies across splits in the
+first run, so the source-name link is the primary one.
 
 Usage:
     python -m dogeye.groups --manifest data/manifest.csv --features data/features.npz \
@@ -14,6 +19,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 
 import numpy as np
 import pandas as pd
@@ -22,6 +28,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 PHASH_MAX_DISTANCE = 6
 COSINE_MIN_SIMILARITY = 0.97
 CHUNK = 1024
+ROBOFLOW_SUFFIX = re.compile(r"_(jpe?g|png|bmp|webp)\.rf\.[0-9a-f]+\.\w+$", re.IGNORECASE)
 
 
 class UnionFind:
@@ -43,6 +50,20 @@ class UnionFind:
 
     def labels(self) -> np.ndarray:
         return np.array([self.find(i) for i in range(len(self.parent))])
+
+
+def source_stem(file_name: str) -> str:
+    """Original upload name: strip Roboflow's "_jpg.rf.<hash>.jpg" suffix."""
+    return ROBOFLOW_SUFFIX.sub("", file_name)
+
+
+def same_source_pairs(projects: pd.Series, file_names: pd.Series):
+    """Yield index pairs that share a project and an original upload name."""
+    keys = projects.astype(str) + "/" + file_names.map(source_stem)
+    for indices in pd.Series(np.arange(len(keys))).groupby(keys.to_numpy()).groups.values():
+        indices = list(indices)
+        for j in indices[1:]:
+            yield indices[0], j
 
 
 def phash_ints(paths: list[str]) -> np.ndarray:
@@ -109,7 +130,11 @@ def main() -> None:
         raise SystemExit("features and manifest have different lengths; rerun dogeye.features")
 
     hashes = phash_ints(manifest["path"].tolist())
-    groups = duplicate_groups(len(manifest), [close_hash_pairs(hashes), similar_embedding_pairs(features)])
+    groups = duplicate_groups(len(manifest), [
+        same_source_pairs(manifest["project"], manifest["source_file"]),
+        close_hash_pairs(hashes),
+        similar_embedding_pairs(features),
+    ])
     manifest["group"] = groups
     manifest["feature_row"] = np.arange(len(manifest))
     manifest = manifest[manifest["label"] != "exclude"].reset_index(drop=True)

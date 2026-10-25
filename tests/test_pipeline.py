@@ -8,7 +8,14 @@ import pytest
 from PIL import Image
 
 from dogeye.data import build_manifest, crop_box, label_for, load_label_config, normalize_name
-from dogeye.groups import close_hash_pairs, duplicate_groups, group_split, similar_embedding_pairs
+from dogeye.groups import (
+    close_hash_pairs,
+    duplicate_groups,
+    group_split,
+    same_source_pairs,
+    similar_embedding_pairs,
+    source_stem,
+)
 from dogeye.metrics import binary_report, expected_calibration_error, threshold_for_recall
 
 
@@ -64,6 +71,17 @@ def test_near_duplicates_are_grouped():
     groups = duplicate_groups(3, [close_hash_pairs(hashes), similar_embedding_pairs(features)])
     # 0~1 by hash, 1~2 by embedding: one transitive group.
     assert len(set(groups)) == 1
+
+
+def test_roboflow_augmentations_share_a_source():
+    a = "D21_3daf27f0-60a5_jpg.rf.4f00de54be173a31235502be092aabb8.jpg"
+    b = "D21_3daf27f0-60a5_jpg.rf.004a9f37b8273c5ceee2694b926e4776.jpg"
+    assert source_stem(a) == source_stem(b) == "D21_3daf27f0-60a5"
+    projects = pd.Series(["healthy", "healthy", "entropion"])
+    files = pd.Series([a, b, a])
+    # Same upload name in another project is a different photo.
+    assert list(same_source_pairs(projects, files)) == [(0, 1)]
+    assert len(set(duplicate_groups(3, [same_source_pairs(projects, files)]))) == 2
 
 
 def test_group_split_never_leaks_a_group():
