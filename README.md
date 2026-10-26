@@ -4,7 +4,7 @@ Flag phone photos of dog eyes that may need a vet visit.
 
 > **Not a diagnosis.** This is a portfolio project that screens for "looks normal" vs "see a vet". It does not identify diseases and must not replace a veterinary examination. If you are worried about your dog's eyes, see a vet.
 
-[中文简介](#中文简介)
+[中文简介](#中文简介) · [Model card](MODEL_CARD.md)
 
 ## Problem
 
@@ -141,7 +141,8 @@ The demo expects a photo cropped to one eye; it has no eye detector yet.
 - [ ] Fine-tuned ConvNeXt / ViT, and a comparison with a multimodal LLM looking at the same photos
 - [x] Bilingual (English / Chinese) demo with FastAPI + Gradio, abstaining on uncertain or low-quality photos
 - [ ] Public demo on Hugging Face Spaces
-- [ ] Model card, external test on DogEyeSeg4, cat-eye generalisation test
+- [x] [Model card](MODEL_CARD.md)
+- [ ] External test on DogEyeSeg4, cat-eye generalisation test
 
 ## 中文简介
 
