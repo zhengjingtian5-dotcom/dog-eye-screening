@@ -1,0 +1,56 @@
+# Publishes main to a Hugging Face Space (Docker SDK), creating the Space on
+# the first run. Needs a repository secret HF_TOKEN (a write token) and a
+# repository variable HF_SPACE such as "username/dog-eye-screening".
+name: Deploy to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: vars.HF_SPACE != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Add Space config to README
+        run: |
+          {
+            echo "---"
+            echo "title: Dog Eye Screening"
+            echo "emoji: 🐶"
+            echo "colorFrom: yellow"
+            echo "colorTo: red"
+            echo "sdk: docker"
+            echo "app_port: 7860"
+            echo "pinned: false"
+            echo "license: mit"
+            echo "---"
+            echo
+            cat README.md
+          } > README.space.md
+          mv README.space.md README.md
+      - name: Upload to Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          pip install -q huggingface_hub
+          python - <<'PY'
+          import os
+          from huggingface_hub import HfApi
+
+          api = HfApi(token=os.environ["HF_TOKEN"])
+          space = os.environ["HF_SPACE"]
+          api.create_repo(space, repo_type="space", space_sdk="docker", exist_ok=True)
+          api.upload_folder(
+              repo_id=space,
+              repo_type="space",
+              folder_path=".",
+              ignore_patterns=[".git/*", ".github/*", "notebooks/*", "tests/*"],
+              delete_patterns=["*"],
+              commit_message=f"Deploy {os.environ.get('GITHUB_SHA', '')[:7]}",
+          )
+          print(f"https://huggingface.co/spaces/{space}")
+          PY
