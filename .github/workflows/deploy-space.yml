@@ -13,7 +13,7 @@ jobs:
     if: vars.HF_SPACE != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Add Space config to README
         run: |
           {

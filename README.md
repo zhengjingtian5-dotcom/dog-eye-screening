@@ -1,10 +1,25 @@
 # Dog eye screening
 
+[![Tests](https://github.com/zhengjingtian5-dotcom/dog-eye-screening/actions/workflows/tests.yml/badge.svg)](https://github.com/zhengjingtian5-dotcom/dog-eye-screening/actions/workflows/tests.yml)
+
 Flag phone photos of dog eyes that may need a vet visit.
 
 > **Not a diagnosis.** This is a portfolio project that screens for "looks normal" vs "see a vet". It does not identify diseases and must not replace a veterinary examination. If you are worried about your dog's eyes, see a vet.
 
 [中文简介](#中文简介) · [Model card](MODEL_CARD.md)
+
+## At a glance
+
+On a held-out test set of 609 independent photos, the model sends **95.9%** of problem eyes to a vet while falsely flagging **0.9%** of healthy ones. It is built from frozen DINOv2 features and a logistic regression, served as a bilingual web demo.
+
+What the project shows:
+
+- **Evaluation I would trust.** The split groups augmented copies and near-duplicates so no photo appears on both sides. The first run leaked copies across splits; an audit of the test predictions caught it, the split was fixed, and both results are kept ([Results](#results)).
+- **Metrics chosen for the harm.** The threshold is set for 95% recall on validation, because a missed problem costs more than a false alarm. The results report bootstrap intervals, calibration and per-condition miss rates, not just accuracy.
+- **Honest limits.** The [model card](MODEL_CARD.md) names what the score does not prove: a likely source shortcut, weak entropion recall and under-confident probabilities.
+- **A product, not only a notebook.** A Chinese/English Gradio page and a JSON API on FastAPI. It says "not sure" for blurry or borderline photos, ships in a Docker image and deploys to Hugging Face Spaces from CI.
+
+Stack: Python, PyTorch, Hugging Face Transformers (DINOv2), scikit-learn, Gradio, FastAPI, Docker, GitHub Actions.
 
 ## Problem
 
@@ -146,7 +161,12 @@ The demo expects a photo cropped to one eye; it has no eye detector yet.
 
 ## 中文简介
 
-这是一个作品集项目：用手机拍的狗眼照片，判断"看起来正常"还是"建议看兽医"，**不做诊断**。重点是严谨的评估：按近似重复图片分组划分数据集，避免准确率虚高；优先保证"建议看兽医"的召回率；报告置信度校准；并按病种列出漏检情况。
+用手机拍的狗狗眼睛照片，判断"看起来正常"还是"建议看兽医"。**本项目不做诊断。**
+
+- **结果**：测试集共 609 张独立照片，有问题的眼睛 95.9% 会被提示就医，健康眼睛的误报率为 0.9%。眼睑内翻是弱项，召回率约 81%。
+- **评估方法**：按近似重复图片分组划分数据集。第一次运行时发现有增强副本跨集合泄漏，修复后重新评估，两次结果都保留在 README 里。阈值按"验证集召回率 95%"来设定，并报告置信区间、概率校准，以及每种病的漏检率。
+- **产品**：中英双语网页和 JSON 接口。照片模糊或分数处于边界时，会回答"无法确定"。项目用 Docker 打包，可以部署到 Hugging Face Spaces。
+- **局限**：每种病的数据来自不同的上传者，模型可能学到了"照片来源"这类捷径。这一点需要用兽医核验过的外部数据集和真实用户照片来验证，详见[模型卡](MODEL_CARD.md)。
 
 ## License
 
