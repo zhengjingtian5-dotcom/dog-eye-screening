@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dog Eye Screening</title>
+<meta name="description" content="Screen a photo of a dog's eye for signs that need a vet. Runs entirely in your browser.">
+<style>
+  :root {
+    --bg: #faf8f5; --surface: #ffffff; --text: #1f1d1a; --muted: #6b665e; --border: #e4dfd7;
+    --accent: #c2541c; --accent-text: #ffffff;
+    --vet-bg: #fdecea; --vet-text: #8a1c12; --unsure-bg: #fff4d6; --unsure-text: #7a5300;
+    --ok-bg: #e6f4ea; --ok-text: #1e5e32;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171614; --surface: #211f1c; --text: #f0ede8; --muted: #a39d93; --border: #38342f;
+      --accent: #e57a42; --accent-text: #171614;
+      --vet-bg: #3d1a16; --vet-text: #ffb4a8; --unsure-bg: #3a2f10; --unsure-text: #f5d27a;
+      --ok-bg: #16301f; --ok-text: #9fd8ae;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  h1 { font-size: 1.6rem; margin: 0; }
+  .lang button { background: none; border: 1px solid var(--border); color: var(--muted);
+    padding: 4px 10px; border-radius: 999px; cursor: pointer; font: inherit; font-size: .85rem; }
+  .lang button[aria-pressed="true"] { color: var(--text); border-color: var(--text); }
+  .note { color: var(--muted); font-size: .9rem; border-left: 3px solid var(--border); padding-left: 10px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 16px; }
+  .drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    min-height: 220px; border: 2px dashed var(--border); border-radius: 10px; cursor: pointer; text-align: center; padding: 12px; }
+  .drop img { max-width: 100%; max-height: 320px; border-radius: 8px; }
+  input[type=file] { display: none; }
+  .primary { width: 100%; margin-top: 12px; padding: 12px; border: 0; border-radius: 10px;
+    background: var(--accent); color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
+  .primary:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); font-size: .9rem; margin-top: 8px; min-height: 1.4em; }
+  .result { border-radius: 10px; padding: 14px 16px; margin-top: 16px; }
+  .result h2 { margin: 0 0 4px; font-size: 1.15rem; }
+  .result p { margin: 0; }
+  .result.see_vet { background: var(--vet-bg); color: var(--vet-text); }
+  .result.uncertain { background: var(--unsure-bg); color: var(--unsure-text); }
+  .result.normal { background: var(--ok-bg); color: var(--ok-text); }
+  .score { font-size: .85rem; opacity: .85; margin-top: 6px !important; }
+  footer { margin-top: 32px; color: var(--muted); font-size: .85rem; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 data-t="title"></h1>
+    <div class="lang">
+      <button type="button" data-lang="zh" aria-pressed="true">中文</button>
+      <button type="button" data-lang="en" aria-pressed="false">English</button>
+    </div>
+  </header>
+  <p data-t="intro"></p>
+  <p class="note" data-t="disclaimer"></p>
+
+  <div class="card">
+    <label class="drop" id="drop" for="file">
+      <span id="placeholder" data-t="pick"></span>
+      <img id="preview" alt="" hidden>
+    </label>
+    <input type="file" id="file" accept="image/*">
+    <button class="primary" id="check" disabled data-t="button"></button>
+    <div class="status" id="status" aria-live="polite"></div>
+    <div id="result" aria-live="polite"></div>
+  </div>
+
+  <footer>
+    <p data-t="privacy"></p>
+    <p><a href="https://github.com/zhengjingtian5-dotcom/dog-eye-screening" data-t="source"></a></p>
+  </footer>
+</main>
+
+<script type="module">
+const TRANSFORMERS_URL = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2";
+
+const TEXT = {
+  zh: {
+    title: "狗狗眼睛健康筛查",
+    intro: "上传一张狗狗单只眼睛的近照，裁剪到眼睛占画面的大部分。",
+    disclaimer: "这是作品集演示，不是诊断，可能会漏掉问题。如果担心狗狗的眼睛，请带它去看兽医。",
+    pick: "点击选择或拍摄一张照片",
+    button: "开始检查",
+    loading: "正在加载模型（首次约 90 MB，之后会缓存）…",
+    running: "正在分析…",
+    ready: "",
+    failed: "模型加载失败，请刷新页面重试。",
+    see_vet: ["可能有问题：建议看兽医", "照片里有值得兽医检查的迹象。"],
+    uncertain: ["无法确定：请重拍或去看兽医", "模型对这张照片没有把握。"],
+    normal: ["看起来正常", "这张照片里没有发现需要看兽医的迹象。请继续留意发红、分泌物、眯眼或混浊。"],
+    dark: "照片太暗。", bright: "照片太亮。", blurry: "照片太模糊。",
+    score: (p, t) => `模型分数 ${p.toFixed(2)}（提示就医阈值 ${t.toFixed(2)}）`,
+    privacy: "模型在你的浏览器里运行，照片不会上传到任何服务器。",
+    source: "项目代码、评估结果与模型卡",
+  },
+  en: {
+    title: "Dog eye screening",
+    intro: "Upload a close-up photo of one dog eye, cropped so the eye fills most of the picture.",
+    disclaimer: "This is a portfolio demo, not a diagnosis. It can miss problems. If you are worried about your dog's eyes, see a vet.",
+    pick: "Tap to choose or take a photo",
+    button: "Check",
+    loading: "Loading the model (about 90 MB the first time, cached after)…",
+    running: "Checking…",
+    ready: "",
+    failed: "The model failed to load. Refresh the page to try again.",
+    see_vet: ["Possible problem: please see a vet", "The photo shows signs that are worth a vet's look."],
+    uncertain: ["Not sure: retake the photo or see a vet", "The model could not decide confidently."],
+    normal: ["Looks normal", "No visible sign that needs a vet in this photo. Keep watching for redness, discharge, squinting or cloudiness."],
+    dark: "The photo is too dark.", bright: "The photo is too bright.", blurry: "The photo is too blurry.",
+    score: (p, t) => `Model score ${p.toFixed(2)} (flag threshold ${t.toFixed(2)})`,
+    privacy: "The model runs in your browser. Your photo is never uploaded.",
+    source: "Code, evaluation and model card",
+  },
+};
+
+// Same rules as src/dogeye/predict.py.
+const MIN_BRIGHTNESS = 40, MAX_BRIGHTNESS = 225, MIN_SHARPNESS = 30;
+
+let lang = "zh", lastResult = null, file = null, stage = "loading";
+const $ = (id) => document.getElementById(id);
+
+function render() {
+  const t = TEXT[lang];
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-t]").forEach((el) => { el.textContent = t[el.dataset.t]; });
+  document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  $("status").textContent = t[stage] ?? "";
+  $("check").disabled = !(file && stage === "ready");
+  const box = $("result");
+  box.replaceChildren();
+  if (!lastResult) return;
+  const [head, body] = t[lastResult.outcome];
+  const div = document.createElement("div");
+  div.className = `result ${lastResult.outcome}`;
+  const h = document.createElement("h2"); h.textContent = head;
+  const p = document.createElement("p"); p.textContent = lastResult.issue ? `${t[lastResult.issue]} ${body}` : body;
+  div.append(h, p);
+  if (lastResult.probability !== null) {
+    const s = document.createElement("p"); s.className = "score";
+    s.textContent = t.score(lastResult.probability, weights.threshold);
+    div.append(s);
+  }
+  box.append(div);
+}
+
+document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => { lang = b.dataset.lang; render(); }));
+
+$("file").addEventListener("change", (e) => {
+  file = e.target.files[0] ?? null;
+  lastResult = null;
+  if (file) {
+    $("preview").src = URL.createObjectURL(file);
+    $("preview").hidden = false;
+    $("placeholder").hidden = true;
+  }
+  render();
+});
+
+function qualityIssue(img) {
+  const { width: w, height: h } = img;
+  const canvas = new OffscreenCanvas(w, h);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  const px = ctx.getImageData(0, 0, w, h).data;
+  const gray = new Float32Array(w * h);
+  let sum = 0;
+  for (let i = 0; i < w * h; i++) {
+    gray[i] = 0.299 * px[4 * i] + 0.587 * px[4 * i + 1] + 0.114 * px[4 * i + 2];
+    sum += gray[i];
+  }
+  const mean = sum / (w * h);
+  if (mean < MIN_BRIGHTNESS) return "dark";
+  if (mean > MAX_BRIGHTNESS) return "bright";
+  let n = 0, s = 0, s2 = 0;
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x;
+      const lap = -4 * gray[i] + gray[i - w] + gray[i + w] + gray[i - 1] + gray[i + 1];
+      n++; s += lap; s2 += lap * lap;
+    }
+  }
+  const variance = s2 / n - (s / n) ** 2;
+  return variance < MIN_SHARPNESS ? "blurry" : null;
+}
+
+const MODEL_ID = "onnx-community/dinov2-small";
+let processor, model, weights, RawImage;
+render();
+try {
+  const transformers = await import(TRANSFORMERS_URL);
+  RawImage = transformers.RawImage;
+  const { AutoModel, AutoProcessor } = transformers;
+  [processor, model, weights] = await Promise.all([
+    AutoProcessor.from_pretrained(MODEL_ID),
+    AutoModel.from_pretrained(MODEL_ID, { dtype: "fp32" }),
+    fetch("model.json").then((r) => r.json()),
+  ]);
+  stage = "ready";
+} catch (err) {
+  console.error(err);
+  stage = "failed";
+}
+render();
+
+$("check").addEventListener("click", async () => {
+  stage = "running"; lastResult = null; render();
+  try {
+    const bitmap = await createImageBitmap(file);
+    const issue = qualityIssue(bitmap);
+    if (issue) {
+      lastResult = { outcome: "uncertain", probability: null, issue };
+    } else {
+      const image = await RawImage.fromBlob(file);
+      const inputs = await processor(image);
+      const { last_hidden_state } = await model(inputs);
+      // DINOv2's pooled output is the layer-normed CLS token: row 0.
+      const cls = last_hidden_state.data.subarray(0, last_hidden_state.dims[2]);
+      let z = weights.bias;
+      for (let i = 0; i < cls.length; i++) z += weights.weights[i] * cls[i];
+      const probability = 1 / (1 + Math.exp(-z));
+      const outcome = probability >= weights.threshold ? "see_vet"
+        : probability >= weights.threshold - weights.uncertain_margin ? "uncertain" : "normal";
+      lastResult = { outcome, probability, issue: null };
+    }
+  } catch (err) {
+    console.error(err);
+    stage = "failed"; render(); return;
+  }
+  stage = "ready"; render();
+});
+</script>
+</body>
+</html>
